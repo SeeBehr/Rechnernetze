@@ -32,40 +32,46 @@ def handle_message(conn, message, addr):
         action = message.split(' ')[0]
         if action == 'BROADCAST':
             name = filter(lambda x: x.ip == addr, users).__next__().name
-            broadcast(f'MESSAGE {name} {message[10:]}')
+            broadcast(f'MESSAGE {name} {message[10:]}$')
         else:
-            conn.send(f'ERROR ungültige aktion {message}'.encode('utf-8'))
+            conn.send(f'ERROR ungültige aktion {message}$'.encode('utf-8'))
     except Exception as e:
         print('Error while handling message: ', e)
 
 def handle_connection(conn, addr):
     global users
-    message = conn.recv(1024).decode('utf-8')
+    message = conn.recv(1).decode('utf-8')
+    while message[-1] != '$':
+        message += conn.recv(1).decode('utf-8')
+    message = message[:-1]
     name = message.split(' ')[1]
     port = message.split(' ')[2]
-    broadcast(f'JOIN {name} {addr} {port}')
+    broadcast(f'JOIN {name} {addr} {port}$')
     # conn.send(f'REGISTERED {name}'.encode('utf-8'))
     userlist = ''
     for user in users:
         userlist += f'{user.name} {user.ip} {user.port};'
-    conn.send(f'USERS {userlist}'.encode('utf-8'))
+    conn.send(f'USERS {userlist}$'.encode('utf-8'))
     users.append(User(conn, name, port, addr))
     while True:
         try:
-            data = conn.recv(1024)
+            data = conn.recv(1).decode('utf-8')
+            while data[-1] != '$':
+                data += conn.recv(1).decode('utf-8')
+            data = data[:-1]
             if not data: # receiving empty messages means that the socket other side closed the socket
                 print('Connection closed from other side')
                 print('Closing ...')
                 conn.close()
-            print('received message: ', data.decode('utf-8'), 'from ', addr)
-            handle_message(conn, data.decode('utf-8'), addr)
+            print('received message: ', data, 'from ', addr)
+            handle_message(conn, data, addr)
         except:
             print('client disconnected')
             print(len(users))
             user = filter(lambda x: x.name == name, users).__next__()
             users = list(filter(lambda x: x.name != name, users))
             print(len(users))
-            broadcast(f'LEAVE {user.name}')
+            broadcast(f'LEAVE {user.name}$')
             break
     
 while True:
